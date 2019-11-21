@@ -209,6 +209,11 @@
         "port": 9044,
         "server": "localhost",
         "username": "cassandra"
+      },
+      {
+        "connectString": "DATABASE=devel;HOSTNAME=lx3;UID=rsdb;PWD=k8belka200;PORT=50000;PROTOCOL=TCPIP;AUTOCOMMIT=0",
+        "dialect": "DB2",
+        "name": "devel@db2inst1@lx3"
       }
     ],
     "sqltools.languageServerEnv": {
