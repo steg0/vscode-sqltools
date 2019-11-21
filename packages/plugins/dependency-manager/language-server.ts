@@ -1,103 +1,70 @@
-import Dialects from '@sqltools/core/dialect';
-import GenericDialect from '@sqltools/core/dialect/generic';
+import Drivers from '@sqltools/drivers';
 import SQLTools from '@sqltools/core/plugin-api';
-import { commandExists } from '@sqltools/core/utils';
-import { spawn, SpawnOptions } from 'child_process';
-import fs from 'fs';
-import path from 'path';
 import { InstallDepRequest } from './contracts';
+import packageManager from './lib/cli';
+import ConfigManager from '@sqltools/core/config-manager';
+import { Settings } from '@sqltools/core/interface';
+import logger from '@sqltools/core/log';
 
-function run(
-  command: string,
-  args?: ReadonlyArray<string>,
-  options: SpawnOptions = {}
-) {
-  return new Promise<{ message: string, stdout?: string; stderr?: string; code: number }>(
-    (resolve, reject) => {
-      options.env = {
-        ...process.env,
-        NODE_VERSION: process.versions.node,
-        ...options.env,
-      };
-      const child = spawn(command, args, { cwd: __dirname, ...options });
-      let stderr = '';
-      let stdout = '';
-      let output = '';
+const log = logger.extend('dep-man');
 
-      child.stdout.on('data', chunk => {
-        stdout += chunk.toString();
-        output += chunk.toString();
-        process.stdout.write(chunk);
-      });
-      child.stderr.on('data', chunk => {
-        stderr += chunk.toString();
-        output += chunk.toString();
-        process.stderr.write(chunk);
-      });
+type AvailableDrivers = keyof typeof Drivers;
 
-      child.on('exit', code => {
-        if (code !== 0) {
-          return reject({
-            code,
-            stderr,
-            message: output
-          });
-        }
-        return resolve({
-          code,
-          stdout,
-          stderr,
-          message: output,
-        });
-      });
-    }
-  );
-}
 
 export default class DependencyManager implements SQLTools.LanguageServerPlugin {
-  private root: string;
   private server: SQLTools.LanguageServerInterface;
 
   public static runningJobs: string[] = [];
 
-  private onRequestToInstall = async ({ dialect } = { dialect: undefined }) => {
-    const DialectClass = Dialects[dialect];
+  private onRequestToInstall = async ({ driver }: { driver?: AvailableDrivers } = { }) => {
+    const depManagerSettings: Settings['dependencyManager'] = ConfigManager.dependencyManager || {
+      packageManager: 'npm',
+      installArgs: ['install'],
+      runScriptArgs: ['run'],
+      autoAccept: false
+    };
+    log.extend('debug')(`Dependency manager settings:\n${JSON.stringify(depManagerSettings, null, 2)}`);
+
+    const DriverClass = Drivers[driver];
     if (
-      !DialectClass ||
-      !DialectClass.deps ||
-      DialectClass.deps.length === 0
+      !DriverClass ||
+      !DriverClass.deps ||
+      DriverClass.deps.length === 0
     ) {
-      throw new Error('Nothing to install. Request is invalid.');
+      log.extend('info')(`Nothing to install for ${driver}. Request is invalid.`);
+      throw new Error(`Nothing to install for ${driver}. Request is invalid.`);
     }
 
-    const deps: typeof GenericDialect['deps'] = DialectClass.deps;
+    const deps = DriverClass.deps;
 
-    if (DependencyManager.runningJobs.includes(dialect)) {
-      return console.log(`You are already installing deps for ${dialect}`)
+    if (DependencyManager.runningJobs.includes(driver)) {
+      return log.extend('info')(`You are already installing deps for ${driver}`)
     }
-    DependencyManager.runningJobs.push(dialect);
+    DependencyManager.runningJobs.push(driver);
 
-    console.log('Received request to install deps:', JSON.stringify(deps));
+    log.extend('debug')('Received request to install deps:', JSON.stringify(deps));
+    const command: string = depManagerSettings.packageManager;
+
     try {
       for (let dep of deps) {
         switch(dep.type) {
           case 'npmscript':
-            console.log(`Will run ${dep.name} script`);
-            await this.runNpmScript(dep.name, { env: dep.env });
-            console.log(`Finished ${dep.name} script`);
+            log.extend('info')(`Will run ${dep.name} script`);
+            await packageManager(command, depManagerSettings.runScriptArgs.concat([dep.name]));
+            log.extend('info')(`Finished ${dep.name} script`);
             break;
           case 'package':
-            console.log(`Will install ${dep.name} package`, dep.args || '');
+            log.extend('info')(`Will install ${dep.name} package`, dep.args || '');
             const args = [`${dep.name}${dep.version ? `@${dep.version}` : ''}`].concat(dep.args || [])
-            await this.install(args, { env: dep.env });
-            console.log(`Finished ${dep.name} script`);
+            await packageManager(command, depManagerSettings.installArgs.concat(args));
+            log.extend('info')(`Finished ${dep.name} script`);
             break;
         }
       }
-      console.log('Finished installing deps');
-      DependencyManager.runningJobs = DependencyManager.runningJobs.filter(v => v !== dialect);
+      log.extend('info')('Finished installing deps');
+      DependencyManager.runningJobs = DependencyManager.runningJobs.filter(v => v !== driver);
     } catch (e) {
-      DependencyManager.runningJobs = DependencyManager.runningJobs.filter(v => v !== dialect);
+      DependencyManager.runningJobs = DependencyManager.runningJobs.filter(v => v !== driver);
       throw e;
     }
   }
@@ -105,36 +72,10 @@ export default class DependencyManager implements SQLTools.LanguageServerPlugin 
   public register(server: SQLTools.LanguageServerInterface) {
     this.server = this.server || server;
 
-    this.server.addOnInitializeHook(({ initializationOptions }) => {
-      this.root = initializationOptions.extensionPath || __dirname;
+    this.server.addOnInitializeHook(() => {
       return { capabilities: {} };
     });
 
-    try {
-      fs.mkdirSync(path.join(this.root, 'node_modules'))
-    } catch (error) {};
-
     this.server.onRequest(InstallDepRequest, this.onRequestToInstall);
-  }
-
-  private npm(args: ReadonlyArray<string>, options: SpawnOptions = {}) {
-    if (!commandExists('npm')) {
-      throw new Error('You need to install node@6 or newer and npm first to install dependencies. Install it and restart to continue.');
-    }
-    return run('npm', args, { cwd: this.root, shell: true, ...options });
-  }
-
-  get npmVersion() {
-    return this.npm(['--version']).then(({ stdout }) =>
-      stdout.replace('\n', '')
-    );
-  }
-
-  public async install(args: string | string[], options: SpawnOptions = {}) {
-    return this.npm(['install', ...(Array.isArray(args) ? args : [args]) ], options);
-  }
-
-  public async runNpmScript(scriptName: string, options: SpawnOptions = {}) {
-    return this.npm(['run', scriptName ], options);
   }
 }

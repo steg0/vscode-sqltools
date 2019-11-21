@@ -3,15 +3,17 @@ import { ExtensionContext, TreeItemCollapsibleState, SnippetString } from 'vscod
 import { DatabaseInterface } from '@sqltools/core/plugin-api';
 import prefixedtableName from '@sqltools/core/utils/query/prefixed-tablenames';
 import SidebarAbstractItem from './SidebarAbstractItem';
-import SidebarColumn from "./SidebarColumn";
+import SidebarColumn from './SidebarColumn';
+import ContextValue from '../context-value';
+
 export default class SidebarTableOrView extends SidebarAbstractItem<SidebarColumn> {
-  public contextValue = 'connection.tableOrView';
+  public contextValue = ContextValue.TABLEORVIEW;
   public value: string;
   public toString() {
     return this.table.name;
   }
   public get name() {
-    return prefixedtableName(this.conn.dialect, this.table);
+    return prefixedtableName(this.conn.driver, this.table);
   }
   public get columns(): DatabaseInterface.TableColumn[] {
     return this._columns.map(item => item.column);
@@ -22,7 +24,7 @@ export default class SidebarTableOrView extends SidebarAbstractItem<SidebarColum
   public get snippet(): SnippetString {
     if (!this.conn)
       return;
-    let snptArr = prefixedtableName(this.conn.dialect, this.table).split('.');
+    let snptArr = prefixedtableName(this.conn.driver, this.table).split('.');
     return new SnippetString(snptArr.map((v, i) => `\${${i + 1}:${v}}`).join('.') + '$0');
   }
   public _columns: SidebarColumn[] = [];

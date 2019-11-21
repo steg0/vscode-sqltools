@@ -1,7 +1,7 @@
 import SQLTools, { DatabaseInterface } from '@sqltools/core/plugin-api';
 import HistoryExplorer from './explorer';
 import { getNameFromId } from '@sqltools/core/utils';
-import { quickPick, insertText } from '@sqltools/core/utils/vscode';
+import { quickPick, insertText } from '@sqltools/vscode/utils';
 import { QuickPickItem, commands } from 'vscode';
 import { EXT_NAME } from '@sqltools/core/constants';
 import { HistoryTreeGroup, HistoryTreeItem } from './explorer/tree-items';
@@ -54,6 +54,10 @@ export default class ConnectionManagerPlugin implements SQLTools.ExtensionPlugin
     }
   }
 
+  private ext_clearHistory = async () => {
+    this.explorer.clear();
+  }
+
   private ext_editHistory = async (entry?: HistoryTreeItem): Promise<void> => {
     let query: string;
     if (entry && entry.query) {
@@ -74,6 +78,7 @@ export default class ConnectionManagerPlugin implements SQLTools.ExtensionPlugin
     this.errorHandler = extension.errorHandler;
     hookedCommands.forEach(cmd => extension.addAfterCommandSuccessHook(cmd, this.addToHistoryHook));
     extension.registerCommand('runFromHistory', this.ext_runFromHistory)
-      .registerCommand('editHistory', this.ext_editHistory);
+      .registerCommand('editHistory', this.ext_editHistory)
+      .registerCommand('clearHistory', this.ext_clearHistory);
   }
 }

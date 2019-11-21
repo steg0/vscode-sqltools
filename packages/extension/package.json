@@ -2,7 +2,7 @@
     "name": "@sqltools/extension",
     "displayName": "SQLTools - Database tools",
     "description": "Database management done right. Connection explorer, query runner, intellisense, bookmarks, query history. Feel like a database hero!",
-    "version": "0.21.1",
+    "version": "0.21.3",
     "publisher": "mtxr",
     "license": "MIT",
     "preview": false,
@@ -18,7 +18,7 @@
     "author": "Matheus Teixeira <me@mteixeira.me>",
     "private": true,
     "engines": {
-        "vscode": "^1.30.0"
+        "vscode": "^1.36.0"
     },
     "categories": [
         "Programming Languages",
@@ -137,9 +137,13 @@
                 "category": "SQLTools Bookmarks"
             },
             {
-                "title": "Delete All",
+                "title": "Clear",
                 "command": "SQLTools.clearBookmarks",
-                "category": "SQLTools Bookmarks"
+                "category": "SQLTools Bookmarks",
+                "icon": {
+                    "light": "icons/trash-light.svg",
+                    "dark": "icons/trash-dark.svg"
+                }
             },
             {
                 "title": "Delete",
@@ -149,22 +153,47 @@
             {
                 "title": "Edit",
                 "command": "SQLTools.editBookmark",
-                "category": "SQLTools Bookmarks"
+                "category": "SQLTools Bookmarks",
+                "icon": {
+                    "light": "icons/edit-light.svg",
+                    "dark": "icons/edit-dark.svg"
+                }
             },
             {
                 "title": "Run",
                 "command": "SQLTools.runFromBookmarks",
-                "category": "SQLTools Bookmarks"
+                "category": "SQLTools Bookmarks",
+                "icon": {
+                    "light": "icons/run-light.svg",
+                    "dark": "icons/run-dark.svg"
+                }
             },
             {
                 "title": "Run",
                 "command": "SQLTools.runFromHistory",
-                "category": "SQLTools History"
+                "category": "SQLTools History",
+                "icon": {
+                    "light": "icons/run-light.svg",
+                    "dark": "icons/run-dark.svg"
+                }
             },
             {
                 "title": "Edit From History",
                 "command": "SQLTools.editHistory",
-                "category": "SQLTools History"
+                "category": "SQLTools History",
+                "icon": {
+                    "light": "icons/edit-light.svg",
+                    "dark": "icons/edit-dark.svg"
+                }
+            },
+            {
+                "title": "Clear",
+                "command": "SQLTools.clearHistory",
+                "category": "SQLTools History",
+                "icon": {
+                    "light": "icons/trash-light.svg",
+                    "dark": "icons/trash-dark.svg"
+                }
             },
             {
                 "title": "Describe Table",
@@ -230,13 +259,23 @@
                 "category": "SQLTools Management"
             },
             {
+                "title": "Open settings",
+                "command": "SQLTools.openSettings",
+                "category": "SQLTools Management"
+            },
+            {
                 "title": "Delete Connection",
                 "command": "SQLTools.deleteConnection",
                 "category": "SQLTools Management"
             },
             {
-                "title": "Add Name To Cursor",
+                "title": "Add Name(s) To Cursor",
                 "command": "SQLTools.insertText",
+                "category": "SQLTools Sidebar"
+            },
+            {
+                "title": "Copy Name(s)",
+                "command": "SQLTools.copyTextFromTreeItem",
                 "category": "SQLTools Sidebar"
             },
             {
@@ -294,6 +333,12 @@
                 "when": "editorTextFocus && !editorReadonly"
             },
             {
+                "command": "SQLTools.copyTextFromTreeItem",
+                "key": "ctrl+c",
+                "mac": "cmd+c",
+                "when": "focusedView == SQLTools/connectionExplorer && sideBarFocus"
+            },
+            {
                 "command": "SQLTools.executeQuery",
                 "key": "ctrl+e ctrl+e",
                 "mac": "cmd+e cmd+e",
@@ -347,7 +392,7 @@
                     ],
                     "default": [],
                     "required": false,
-                    "description": "Name of the connection to auto connect on start",
+                    "markdownDescription": "Name(s) of the connection to auto connect on start",
                     "items": {
                         "type": "string"
                     }
@@ -375,21 +420,27 @@
                     "items": {
                         "type": "string"
                     },
-                    "description": "Languages with SQL completion enabled. You can use any language identifier defined on https://code.visualstudio.com/docs/languages/identifiers."
+                    "markdownDescription": "Languages with SQL completion enabled.\n\nYou can use any language identifier defined on https://code.visualstudio.com/docs/languages/identifiers."
                 },
                 "sqltools.formatLanguages": {
                     "type": "array",
                     "default": [
                         "sql"
                     ],
-                    "description": "Languages with SQL formatting enabled. You can use any language identifier defined on https://code.visualstudio.com/docs/languages/identifiers."
+                    "items": {
+                        "type": "string"
+                    },
+                    "markdownDescription": "Languages with SQL formatting enabled.\n\nYou can use any language identifier defined on https://code.visualstudio.com/docs/languages/identifiers."
                 },
                 "sqltools.codelensLanguages": {
                     "type": "array",
                     "default": [
                         "sql"
                     ],
-                    "description": "Languages with SQL codelens enabled. You can use any language identifier defined on https://code.visualstudio.com/docs/languages/identifiers. More info about codelens, see https://vscode-sqltools.mteixeira.dev/features/codelens"
+                    "items": {
+                        "type": "string"
+                    },
+                    "markdownDescription": "Languages with SQL codelens enabled.\n\nYou can use any language identifier defined on https://code.visualstudio.com/docs/languages/identifiers.\n\nMore info about codelens, see https://vscode-sqltools.mteixeira.dev/features/codelens"
                 },
                 "sqltools.format": {
                     "type": "object",
@@ -423,7 +474,7 @@
                 },
                 "sqltools.connections": {
                     "type": "array",
-                    "title": "Connections",
+                    "markdownDescription": "Connections list",
                     "default": [],
                     "items": {
                         "type": "object",
@@ -431,6 +482,10 @@
                             "name": {
                                 "type": "string",
                                 "description": "Connection name"
+                            },
+                            "group": {
+                                "type": "string",
+                                "description": "Connection group name"
                             },
                             "server": {
                                 "type": "string",
@@ -477,7 +532,7 @@
                                 "required": false,
                                 "default": false
                             },
-                            "dialect": {
+                            "driver": {
                                 "type": "string",
                                 "enum": [
                                     "AWS Redshift",
@@ -491,8 +546,39 @@
                                     "SAPHana",
                                     "SQLite"
                                 ],
-                                "description": "Connection Dialect",
+                                "description": "Connection Driver",
                                 "required": false
+                            },
+                            "databaseFilter": {
+                                "type": [
+                                    "object",
+                                    "null"
+                                ],
+                                "description": "Allow user to select databases to be shown or not on explorer. Default is to show connected database only. Set to null to show all",
+                                "default": null,
+                                "properties": {
+                                    "show": {
+                                        "type": "array",
+                                        "default": [],
+                                        "description": "Name database you want to show",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "hide": {
+                                        "type": "array",
+                                        "default": [],
+                                        "description": "Name database you don't want to show",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            },
+                            "dialect": {
+                                "type": "string",
+                                "description": "Connection Driver",
+                                "deprecationMessage": "***DEPRECATED*** Replaced by `driver` property. Use `driver` property instead."
                             },
                             "connectString": {
                                 "type": [
@@ -507,7 +593,7 @@
                                     "null",
                                     "object"
                                 ],
-                                "description": "See https://vscode-sqltools.mteixeira.dev/connections/mssql#1-1-specific-options for more details.",
+                                "markdownDescription": "See https://vscode-sqltools.mteixeira.dev/connections/mssql#1-1-specific-options for more details.",
                                 "required": false,
                                 "default": {},
                                 "properties": {
@@ -526,6 +612,7 @@
                                     "object",
                                     "null"
                                 ],
+                                "description": "See https://vscode-sqltools.mteixeira.dev/connections/mysql#2-mysqloptions for more details.",
                                 "default": {},
                                 "required": false,
                                 "properties": {
@@ -550,14 +637,14 @@
                                     }
                                 }
                             },
-                            "pqOptions": {
+                            "pgOptions": {
                                 "type": [
                                     "object",
                                     "null"
                                 ],
                                 "default": {},
                                 "required": false,
-                                "description": "See https://vscode-sqltools.mteixeira.dev/connections/postgresql#1-1-specific-options for more details.",
+                                "markdownDescription": "See https://vscode-sqltools.mteixeira.dev/connections/postgresql#1-1-specific-options for more details.",
                                 "properties": {
                                     "ssl": {
                                         "required": false,
@@ -577,7 +664,7 @@
                                 ],
                                 "default": {},
                                 "required": false,
-                                "description": "See https://vscode-sqltools.mteixeira.dev/connections/oracledb#2-3-specific-options for more details."
+                                "markdownDescription": "See https://vscode-sqltools.mteixeira.dev/connections/oracledb#2-3-specific-options for more details."
                             },
                             "connectionTimeout": {
                                 "type": "number",
@@ -638,7 +725,7 @@
                                 "current",
                                 "end"
                             ],
-                            "description": "Define where the results should show up. Use the defined strings or any number defined in https://code.visualstudio.com/api/references/vscode-api#ViewColumn"
+                            "markdownDescription": "Define where the results should show up. Use the defined strings or any number defined in https://code.visualstudio.com/api/references/vscode-api#ViewColumn"
                         },
                         "customization": {
                             "type": "object",
@@ -708,6 +795,57 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Auto open session file when connect"
+                },
+                "sqltools.dependencyManager": {
+                    "type": "object",
+                    "description": "Dependency manager settings",
+                    "default": {
+                        "packageManager": "npm",
+                        "installArgs": [
+                            "install"
+                        ],
+                        "runScriptArgs": [
+                            "run"
+                        ],
+                        "autoAccept": false
+                    },
+                    "properties": {
+                        "packageManager": {
+                            "type": "string",
+                            "markdownDescription": "Package manager name or path. Eg. yarn, npm or absolute paths like /usr/bin/npm",
+                            "default": "npm"
+                        },
+                        "installArgs": {
+                            "type": "array",
+                            "description": "Array of args passed when installing. If you use yarn, this shoud be set to `[\"add\"]`",
+                            "default": [
+                                "install"
+                            ]
+                        },
+                        "runScriptArgs": {
+                            "type": "array",
+                            "description": "Array of args passed when runnning npm scripts.",
+                            "default": [
+                                "run"
+                            ]
+                        },
+                        "autoAccept": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Ignore confirmation requests to install or updagre dependencies."
+                        }
+                    }
+                },
+                "sqltools.debug": {
+                    "type": "object",
+                    "description": "SQLTools debug settings",
+                    "default": {},
+                    "properties": {
+                        "namespaces": {
+                            "type": "string",
+                            "markdownDescription": "Log debug namespaces. Eg: `ext:*,-*:debug`. Thist will print only extension logs and will ignore debug messages. See: https://github.com/visionmedia/debug/blob/4.1.1/README.md"
+                        }
+                    }
                 }
             }
         },
@@ -740,6 +878,10 @@
             "commandPalette": [
                 {
                     "command": "SQLTools.insertText",
+                    "when": "false"
+                },
+                {
+                    "command": "SQLTools.copyTextFromTreeItem",
                     "when": "false"
                 },
                 {
@@ -795,6 +937,11 @@
                     "command": "SQLTools.clearBookmarks",
                     "when": "view == SQLTools/bookmarksExplorer",
                     "group": "navigation@1"
+                },
+                {
+                    "command": "SQLTools.clearHistory",
+                    "when": "view == SQLTools/historyExplorer",
+                    "group": "navigation@1"
                 }
             ],
             "view/item/context": [
@@ -819,6 +966,11 @@
                     "group": "navigation@1"
                 },
                 {
+                    "command": "SQLTools.openSettings",
+                    "when": "view == SQLTools/connectionExplorer && viewItem == connection",
+                    "group": "sqltools.dbExplorer.edit@0"
+                },
+                {
                     "command": "SQLTools.deleteConnection",
                     "when": "view == SQLTools/connectionExplorer && viewItem =~ /^(connection|connectedConnection)$/",
                     "group": "sqltools.dbExplorer@0"
@@ -840,8 +992,13 @@
                 },
                 {
                     "command": "SQLTools.insertText",
-                    "when": "!editorReadonly && view == SQLTools/connectionExplorer && viewItem =~ /^connection\\.(resource_group|tableOrView)/ && !sqltools.Results.active",
-                    "group": "navigation"
+                    "when": "!editorReadonly && view == SQLTools/connectionExplorer && viewItem =~ /^connection\\.(resource_group|tableOrView|column|function)/",
+                    "group": "sqltools.connectionExplorer.edit@0"
+                },
+                {
+                    "command": "SQLTools.copyTextFromTreeItem",
+                    "when": "!editorReadonly && view == SQLTools/connectionExplorer && viewItem =~ /^connection\\.(resource_group|tableOrView|column|function)/",
+                    "group": "sqltools.connectionExplorer.edit@1"
                 },
                 {
                     "command": "SQLTools.selectConnection",
@@ -864,6 +1021,11 @@
                     "group": "inline@1"
                 },
                 {
+                    "command": "SQLTools.editHistory",
+                    "when": "view == SQLTools/historyExplorer && viewItem == history.item",
+                    "group": "inline@0"
+                },
+                {
                     "command": "SQLTools.runFromHistory",
                     "when": "view == SQLTools/historyExplorer && viewItem == history.item",
                     "group": "inline@0"
@@ -880,6 +1042,11 @@
                 },
                 {
                     "command": "SQLTools.runFromBookmarks",
+                    "when": "view == SQLTools/bookmarksExplorer && viewItem == bookmark.item",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "SQLTools.editBookmark",
                     "when": "view == SQLTools/bookmarksExplorer && viewItem == bookmark.item",
                     "group": "inline@0"
                 },
@@ -952,10 +1119,12 @@
     "devDependencies": {
         "@babel/cli": "^7.5.5",
         "@types/jest": "^24.0.11",
+        "@types/vscode": "^1.36.0",
         "babel-loader": "^8.0.4",
         "copy-webpack-plugin": "^5.0.0",
         "cross-env": "^5.2.0",
         "css-loader": "^3.2.0",
+        "dotenv": "^8.2.0",
         "file-loader": "^4.2.0",
         "jest": "^24.5.0",
         "jest-cli": "^24.5.0",
@@ -966,8 +1135,8 @@
         "terser-webpack-plugin": "^1.3.0",
         "ts-jest": "^24.0.2",
         "ts-loader": "^6.0.0",
-        "typescript": "^3.4.1",
-        "vscode": "^1.1.30",
+        "typescript": "3.6.2",
+        "vscode": "^1.1.36",
         "webpack": "^4.35.0",
         "webpack-cli": "^3.3.5"
     },

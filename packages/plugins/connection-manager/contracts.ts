@@ -1,6 +1,7 @@
 import { RequestType, NotificationType } from 'vscode-languageserver-protocol';
 import { ConnectionInterface } from '@sqltools/core/interface';
 import { DatabaseInterface } from '@sqltools/core/plugin-api';
+import ContextValue from './context-value';
 
 export const GetConnectionsRequest = new RequestType<
   { connectedOnly?: boolean, sort?: 'connectedFirst' | 'name', connId?: string },
@@ -86,3 +87,9 @@ export interface ProgressNotificationCompleteParams {
 };
 export const ProgressNotificationComplete = new NotificationType<ProgressNotificationCompleteParams, void>('sqltools/window/progress/complete');
 
+export const GetChildrenForTreeItemRequest = new RequestType<
+  { conn: ConnectionInterface, contextValue: ContextValue },
+  any[], // @TODO define type
+  Error,
+  void
+>('connection/GetChildrenForTreeItemRequest');

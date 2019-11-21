@@ -22,10 +22,7 @@ export default abstract class WebviewProvider<State = any> implements Disposable
   <style>
   :root {${cssVariables}}
   </style>
-  <link rel="stylesheet" type="text/css" href="${extRoot}/ui/vendor.css">
   <link rel="stylesheet" type="text/css" href="${extRoot}/ui/commons.css">
-  <link rel="stylesheet" type="text/css" href="${extRoot}/ui/${this.id}.css">
-  <link rel="stylesheet" type="text/css" href="${extRoot}/ui/${this.id}.css">
   <script type="text/javascript" charset="UTF-8">window.extRoot = ${JSON.stringify(extRoot)};</script>
 </head>
 <body>
@@ -95,7 +92,7 @@ export default abstract class WebviewProvider<State = any> implements Disposable
     }
   }
 
-  public hide() {
+  public hide = () => {
     if (this.panel === undefined) return;
     this.setPreviewActiveContext(false);
     this.panel.dispose();
@@ -108,20 +105,20 @@ export default abstract class WebviewProvider<State = any> implements Disposable
     this.disposeEvent.fire();
   }
 
-  public postMessage(message: any) {
+  public postMessage = (message: any) => {
     if (!this.panel) return;
     this.panel.webview.postMessage(message);
   }
-  public setMessageCallback(cb) {
+  public setMessageCallback = (cb) => {
     this.messageCb = cb;
   }
 
-  private setPreviewActiveContext(value: boolean) {
+  private setPreviewActiveContext = (value: boolean) => {
 		commands.executeCommand('setContext', `sqltools.${this.id}.active`, value);
   }
 
   private lastState = undefined;
-  public getState(): Promise<State> {
+  public getState = (): Promise<State> => {
     if (!this.panel) return Promise.resolve(null);
 
     return new Promise((resolve, reject) => {
@@ -142,7 +139,7 @@ export default abstract class WebviewProvider<State = any> implements Disposable
     })
   }
 
-  public updatePanelName () {
-    this.panel.title = this.title;
+  public updatePanelName = () => {
+    if (this.panel) this.panel.title = this.title;
   }
 }

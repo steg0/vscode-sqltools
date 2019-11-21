@@ -1,4 +1,4 @@
-import { DatabaseDialect } from './dialect';
+import { DatabaseDriver } from './driver';
 import { ClientConfig } from 'pg';
 import { ConnectionConfig } from 'mysql';
 import { DatabaseInterface } from '@sqltools/core/plugin-api';
@@ -12,6 +12,12 @@ export interface ConnectionInterface {
    * @memberof ConnectionInterface
    */
   name: string;
+  /**
+   * Connection group name
+   * @type {string}
+   * @memberof ConnectionInterface
+   */
+   group?: string;
   /**
    * Server address
    * @type {string}
@@ -58,11 +64,11 @@ export interface ConnectionInterface {
    */
   askForPassword?: boolean;
   /**
-   * Connection Dialect
-   * @type {DatabaseDialect}
+   * Connection driver
+   * @type {DatabaseDriver}
    * @memberof ConnectionInterface
    */
-  dialect: DatabaseDialect;
+  driver: DatabaseDriver;
   /**
    * Connection timeout in seconds
    * @type {number}
@@ -85,7 +91,6 @@ export interface ConnectionInterface {
   connectString?: string;
   /**
    * MSSQL specific driver options. See https://vscode-sqltools.mteixeira.dev/connections/mssql#1-1-specific-options
-   * @deprecated replaced by mssqlOptions
    * @type {any}
    * @memberof ConnectionInterface
    */
@@ -166,9 +171,21 @@ export interface ConnectionInterface {
     connected?: string;
     disconnected?: string;
   };
+  /**
+   * Allow user to select databases to be shown or not on explorer. Default is to show connected database only. Set to null to show all
+   *
+   * @type {DatabaseFilterType}
+   * @memberof ConnectionInterface
+   */
+   databaseFilter?: DatabaseFilterType;
 }
 
-export interface ConnectionDialect {
+export interface DatabaseFilterType {
+  show: string[];
+  hide: string[];
+}
+
+export interface ConnectionDriver {
   connection: any;
   credentials: ConnectionInterface;
   open(): Promise<any>;
@@ -177,7 +194,7 @@ export interface ConnectionDialect {
   getColumns(): Promise<DatabaseInterface.TableColumn[]>;
   getFunctions(): Promise<DatabaseInterface.Function[]>;
   describeTable(tableName: string): Promise<DatabaseInterface.QueryResults[]>;
-  showRecords(tableName: string, limit: number): Promise<DatabaseInterface.QueryResults[]>;
+  showRecords(tableName: string, limit: number, page?: number): Promise<DatabaseInterface.QueryResults[]>;
   query(query: string): Promise<DatabaseInterface.QueryResults[]>;
   testConnection?(): Promise<void>;
 }

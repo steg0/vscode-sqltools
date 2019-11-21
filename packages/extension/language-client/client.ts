@@ -1,21 +1,20 @@
-import logger from '@sqltools/core/log/vscode';
+import logger from '@sqltools/core/log';
 import path from 'path';
 import fs from 'fs';
 import ConfigManager from '@sqltools/core/config-manager';
 import { DISPLAY_NAME, EXT_NAME } from '@sqltools/core/constants';
 import SQLTools from '@sqltools/core/plugin-api';
-import { commandExists, Telemetry } from '@sqltools/core/utils';
+import { commandExists } from '@sqltools/core/utils';
 import { env as VSCodeEnv, version as VSCodeVersion, workspace as Wspc, ExtensionContext, window, commands } from 'vscode';
 import { CloseAction, ErrorAction, ErrorHandler as LanguageClientErrorHandler, LanguageClient, LanguageClientOptions, NodeModule, ServerOptions, TransportKind } from 'vscode-languageclient';
 import ErrorHandler from '../api/error-handler';
+import telemetry from '@sqltools/core/utils/telemetry';
+
+const log = logger.extend('lc');
 
 export class SQLToolsLanguageClient implements SQLTools.LanguageClientInterface {
   public client: LanguageClient;
   public clientErrorHandler: LanguageClientErrorHandler;
-  private _telemetry = new Telemetry({
-    logger,
-    product: 'language-client',
-  });
 
   constructor(public context: ExtensionContext) {
     this.client = new LanguageClient(
@@ -71,18 +70,21 @@ export class SQLToolsLanguageClient implements SQLTools.LanguageClientInterface 
     const serverModule = this.context.asAbsolutePath('languageserver.js');
     let runtime: string = undefined;
     const useNodeRuntime = ConfigManager.useNodeRuntime;
-    if (useNodeRuntime && typeof useNodeRuntime === 'string') {
-      const runtimePath = path.normalize(useNodeRuntime);
-      if (fs.existsSync(runtimePath)) {
-        runtime = runtimePath;
+    if (useNodeRuntime) {
+      if (typeof useNodeRuntime === 'string') {
+        const runtimePath = path.normalize(useNodeRuntime);
+        if (fs.existsSync(runtimePath)) {
+          runtime = runtimePath;
+        }
       } else {
-        window.showInformationMessage('Node runtime not found. Using default as a fallback.');
+        if (commandExists('node')) {
+          runtime = 'node';
+        }
       }
-    } else if (useNodeRuntime) {
-      if (commandExists('node')) {
-        runtime = 'node';
-      } else {
-        window.showInformationMessage('Node runtime not found. Using default as a fallback.');
+      if (!runtime) {
+        const message = 'Node runtime not found. Using default as a fallback.';
+        window.showInformationMessage(message);
+        log.extend('info')(message)
       }
     }
 
@@ -112,7 +114,6 @@ export class SQLToolsLanguageClient implements SQLTools.LanguageClientInterface 
 
   private getClientOptions(): LanguageClientOptions {
     const telemetryArgs: SQLTools.TelemetryArgs = {
-      product: 'language-server',
       enableTelemetry: ConfigManager.telemetry,
       vscodeInfo: {
         sessId: VSCodeEnv.sessionId,
@@ -152,7 +153,7 @@ export class SQLToolsLanguageClient implements SQLTools.LanguageClientInterface 
         fileEvents: Wspc.createFileSystemWatcher('**/.sqltoolsrc'),
       },
       initializationFailedHandler: error => {
-        this.telemetry.registerException(error, {
+        telemetry.registerException(error, {
           message: 'Server initialization failed.',
         });
         this.client.error('Server initialization failed.', error);
@@ -161,7 +162,7 @@ export class SQLToolsLanguageClient implements SQLTools.LanguageClientInterface 
       },
       errorHandler: {
         error: (error, message, count): ErrorAction => {
-          this.telemetry.registerException(error, {
+          telemetry.registerException(error, {
             message: 'Language Server error.',
             givenMessage: message,
             count,
@@ -184,10 +185,7 @@ export class SQLToolsLanguageClient implements SQLTools.LanguageClientInterface 
       'serverError', // @TODO: constant
       onError,
     );
-    this.telemetry.registerInfoMessage('LanguageClient ready');
-  }
-
-  public get telemetry() {
-    return this._telemetry;
+    telemetry.registerMessage('info', 'LanguageClient ready');
+    log.extend('info')('LanguageClient ready');
   }
 }

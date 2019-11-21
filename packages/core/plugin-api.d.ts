@@ -3,7 +3,6 @@ import { IConnection, TextDocuments } from 'vscode-languageserver';
 import { RequestType, RequestType0 } from 'vscode-languageserver-protocol';
 import { ExtensionContext } from 'vscode';
 import { Store } from 'redux';
-import { Contracts } from 'applicationinsights';
 export declare type ArgsType<T> = T extends (...args: infer U) => any ? U : never;
 export declare type Arg0<T> = ArgsType<T>[0];
 export declare type RequestHandler<T> = T extends RequestType<infer P, infer R, any, any>
@@ -15,41 +14,17 @@ export declare namespace SQLTools {
     start(): void;
     end(): void;
   }
-  type Product = 'core' | 'extension' | 'language-server' | 'language-client' | 'ui';
+  type Product = 'core' | 'ext' | 'ls' | 'lc' | 'ui';
   interface VSCodeInfo {
     uniqId?: string;
     sessId?: string;
     version?: string;
   }
   interface TelemetryArgs {
-    logger?: Console;
-    product: Product;
     enableTelemetry?: boolean;
-    vscodeInfo?: VSCodeInfo;
+    extraInfo?: VSCodeInfo;
   }
-  class TelemetryStaticProps {
-    static SeveriryLevel: Contracts.SeverityLevel;
-    static enabled: Boolean;
-    static vscodeInfo: VSCodeInfo;
-  }
-  interface TelemetryInterface extends TelemetryStaticProps {
-    updateOpts(opts: TelemetryArgs): any;
-    enable(): void;
-    disable(): void;
-    registerCommand(command: string): any;
-    registerInfoMessage(message: string, value?: string): any;
-    registerException(
-      error: Error,
-      data?: {
-        [key: string]: any;
-      }
-    ): void;
-    registerErrorMessage(message: string, error?: Error, value?: string): void;
-    registerSession(): any;
-    registerMessage(severity: Contracts.SeverityLevel, message: string, value?: string): void;
-    registerTime(timeKey: string, timer: Timer): any;
-    registerMetric(name: string, value: number): any;
-  }
+
   interface LanguageServerPlugin<T = LanguageServerInterface> {
     register: (server: T) => void;
   }
@@ -94,8 +69,8 @@ export declare namespace SQLTools {
     addOnInitializedHook(hook: Arg0<IConnection['onInitialized']>): this;
     notifyError(message: string, error?: any): any;
     client: IConnection['client'];
+    server: IConnection;
     docManager: TextDocuments;
-    telemetry: TelemetryInterface;
     store: S;
   }
   interface LanguageClientInterface {
@@ -106,7 +81,6 @@ export declare namespace SQLTools {
     onRequest: LanguageClient['onRequest'];
     sendNotification: LanguageClient['sendNotification'];
     onNotification: LanguageClient['onNotification'];
-    telemetry: TelemetryInterface;
   }
 }
 
@@ -172,14 +146,17 @@ export namespace DatabaseInterface {
   }
 
   export type Procedure = Function;
-  export interface QueryResults {
+  export interface QueryResults<T extends { [key: string]: any } = any> {
     label?: string;
     connId: string;
     error?: boolean;
-    results: any[];
+    results: (T extends { [key: string]: any } ? T : any)[];
     cols: string[];
     query: string;
     messages: string[];
+    page?: number;
+    total?: number;
+    pageSize?: number;
   }
 }
 

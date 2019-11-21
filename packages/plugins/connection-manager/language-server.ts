@@ -2,20 +2,24 @@ import Connection from '@sqltools/core/connection';
 import ConfigManager from '@sqltools/core/config-manager';
 import { ConnectionInterface,} from '@sqltools/core/interface';
 import SQLTools, { RequestHandler, DatabaseInterface } from '@sqltools/core/plugin-api';
-import { getConnectionId } from '@sqltools/core/utils';
+import { getConnectionId, migrateConnectionSetting } from '@sqltools/core/utils';
 import csvStringify from 'csv-stringify/lib/sync';
 import fs from 'fs';
-import { ConnectionDataUpdatedRequest, ConnectRequest, DisconnectRequest, GetConnectionDataRequest, GetConnectionPasswordRequest, GetConnectionsRequest, RefreshTreeRequest, RunCommandRequest, SaveResultsRequest, ProgressNotificationStart, ProgressNotificationComplete, TestConnectionRequest } from './contracts';
+import { ConnectionDataUpdatedRequest, ConnectRequest, DisconnectRequest, GetConnectionDataRequest, GetConnectionPasswordRequest, GetConnectionsRequest, RefreshTreeRequest, RunCommandRequest, SaveResultsRequest, ProgressNotificationStart, ProgressNotificationComplete, TestConnectionRequest, GetChildrenForTreeItemRequest } from './contracts';
 import actions from './store/actions';
 import DependencyManager from '../dependency-manager/language-server';
 import { DependeciesAreBeingInstalledNotification } from '../dependency-manager/contracts';
 import { decorateException } from '@sqltools/core/utils/errors';
+import logger from '@sqltools/core/log';
+import telemetry from '@sqltools/core/utils/telemetry';
+const log = logger.extend('conn-mann');
 
 export default class ConnectionManagerPlugin implements SQLTools.LanguageServerPlugin {
   private server: SQLTools.LanguageServerInterface;
   private get connections() {
     const { activeConnections, lastUsedId } = this.server.store.getState();
     return (ConfigManager.connections || []).map(conn => {
+      conn = migrateConnectionSetting(conn);
       conn.isActive = getConnectionId(conn) === lastUsedId;
       conn.isConnected = !!activeConnections[getConnectionId(conn)];
 
@@ -90,7 +94,7 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
       toRefresh = toRefresh.filter(c => connIds.includes(c));
     }
     await Promise.all(toRefresh.map(c => {
-      console.log(`Refreshing ${(<Connection>activeConnections[c]).getName()}`)
+      log.extend('info')(`Refreshing ${(<Connection>activeConnections[c]).getName()}`)
       return this._loadConnectionData(activeConnections[c]);
     }));
   };
@@ -142,10 +146,10 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
     try {
       if (c) {
         this.server.store.dispatch(actions.Connect(c));
-        await this._loadConnectionData(c);
+        this._loadConnectionData(c);
         return this.serializarConnectionState(req.conn);
       }
-      c = new Connection(req.conn, this.server.telemetry);
+      c = new Connection(req.conn);
       progressBase = {
         id: `progress:${c.getId()}`,
         title: c.getName(),
@@ -156,8 +160,8 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
       this.server.store.dispatch(actions.Connect(c));
 
       this.server.sendNotification(ProgressNotificationStart, { ...progressBase, message: 'Connecting....' });
-      await c.connect()
-      await this._loadConnectionData(c);
+      await c.connect();
+      this._loadConnectionData(c);
       this.server.sendNotification(ProgressNotificationComplete, { ...progressBase, message: 'Connected!' });
       return this.serializarConnectionState(req.conn);
     } catch (e) {
@@ -165,13 +169,13 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
       progressBase && this.server.sendNotification(ProgressNotificationComplete, progressBase);
       e = decorateException(e, { conn: req.conn });
       if (e.data && e.data.notification) {
-        if (req.conn.dialect && DependencyManager.runningJobs.includes(req.conn.dialect)) {
+        if (req.conn.driver && DependencyManager.runningJobs.includes(req.conn.driver)) {
           return void this.server.sendNotification(DependeciesAreBeingInstalledNotification, e.data.args);
         }
         return void this.server.sendNotification(e.data.notification, e.data.args);
       }
 
-      this.server.telemetry.registerException(e);
+      telemetry.registerException(e);
 
       throw e;
     }
@@ -194,14 +198,14 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
         ...req.conn,
         password: req.conn.password || req.password,
       }
-      await Connection.testConnection(creds, this.server.telemetry);
+      await Connection.testConnection(creds);
       this.server.sendNotification(ProgressNotificationComplete, { ...progressBase, message: 'Connection test successful!' });
       return req.conn;
     } catch (e) {
       progressBase && this.server.sendNotification(ProgressNotificationComplete, progressBase);
       e = decorateException(e, { conn: req.conn });
       if (e.data && e.data.notification) {
-        if (req.conn.dialect && DependencyManager.runningJobs.includes(req.conn.dialect)) {
+        if (req.conn.driver && DependencyManager.runningJobs.includes(req.conn.driver)) {
           return void this.server.sendNotification(DependeciesAreBeingInstalledNotification, e.data.args);
         }
         delete e.data.args.conn;
@@ -235,6 +239,20 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
     }
   }
 
+  private GetChildrenForTreeItemHandler: RequestHandler<typeof GetChildrenForTreeItemRequest> = async (req) => {
+    if (!req || !req.conn) {
+      return [];
+    }
+    let c = this.getConnectionInstance(req.conn);
+    if (!c) return [];
+    switch (req.contextValue) {
+      case 'connection':
+      case 'connectedConnection':
+        // return c.getDatabases(); // @TODO implement
+    }
+    return [];
+  };
+
   public register(server: SQLTools.LanguageServerInterface) {
     this.server = this.server || server;
 
@@ -247,11 +265,13 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
     this.server.onRequest(ConnectRequest, this.openConnectionHandler);
     this.server.onRequest(TestConnectionRequest, this.testConnectionHandler);
     this.server.onRequest(GetConnectionsRequest, this.clientRequestConnectionHandler);
+    this.server.onRequest(GetChildrenForTreeItemRequest, this.GetChildrenForTreeItemHandler);
     this.server.addOnDidChangeConfigurationHooks(this._autoConnectIfActive);
   }
 
   // internal utils
   private async _loadConnectionData(conn: Connection) {
+    log.extend('warn')('*** DEPRECATION *** _loadConnectionData is deprecated and will be removed in v0.22.x')
     if (!conn) {
       return this._updateSidebar({ conn: null, tables: [], columns: [], functions: [] });
     }
@@ -299,7 +319,7 @@ export default class ConnectionManagerPlugin implements SQLTools.LanguageServerP
       const autoConnectTo = Array.isArray(ConfigManager.autoConnectTo)
       ? ConfigManager.autoConnectTo
       : [ConfigManager.autoConnectTo];
-      console.info(`Configuration set to auto connect to: ${autoConnectTo}`);
+      log.extend('info')(`Configuration set to auto connect to: ${autoConnectTo}`);
 
       defaultConnections.push(...ConfigManager.connections
         .filter((conn) => conn && autoConnectTo.indexOf(conn.name) >= 0)

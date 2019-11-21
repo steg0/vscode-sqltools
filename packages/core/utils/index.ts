@@ -1,10 +1,9 @@
 import path from 'path';
 import * as query from './query';
 import commandExists from './command-exists';
-import { ConnectionInterface, DatabaseDialect } from '../interface';
-export * from './get-home';
+import { ConnectionInterface, DatabaseDriver } from '../interface';
+export * from './persistence';
 export * from './replacer';
-export * from './telemetry';
 export * from './timer';
 export * from './get-connection-stuff';
 
@@ -20,8 +19,8 @@ export function asArray<T>(obj: any) {
 export function getConnectionDescription(c: ConnectionInterface): string | null {
   if (!c) return null;
 
-  if (c.dialect === DatabaseDialect.SQLite) {
-    return `file://${c.database}`;
+  if (c.driver === DatabaseDriver.SQLite) {
+    return c.database.replace(/\$\{workspaceFolder:(.+)}/g, '$1').replace(/\$\{workspaceFolder}/g, '.');
   }
 
   if (c.connectString) {
@@ -39,7 +38,7 @@ export function getConnectionDescription(c: ConnectionInterface): string | null 
   ].filter(Boolean).join('');
 }
 
-export function isEmpty(v?: string) {
+export function isEmpty(v?: string | any[]) {
   return !v || v.length === 0;
 }
 

@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const path = require('path');
 const webpack = require('webpack');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
@@ -37,7 +39,7 @@ const outdir = path.resolve(rootdir, '..', 'dist');
 function getExtensionConfig() {
   /** @type webpack.Configuration */
   let config = {
-    name: 'sqltools',
+    name: 'ext',
     target: 'node',
     entry: {
       extension: path.join(__dirname, 'index.ts'),
@@ -77,7 +79,7 @@ function getExtensionConfig() {
           },
         },
         {
-          from: path.join(__dirname, '..', '..', 'docs', 'README.md'),
+          from: path.join(__dirname, '..', '..', 'README.md'),
           to: path.join(outdir, 'README.md'),
           transform: (content) => {
             content = content.toString();
@@ -87,6 +89,7 @@ function getExtensionConfig() {
           },
         },
         { from: path.join(__dirname, 'icons'), to: path.join(outdir, 'icons') },
+        { from: path.join(__dirname, '..', 'core', 'icons'), to: path.join(outdir, 'icons', 'driver') },
         { from: path.join(__dirname, 'language'), to: path.join(outdir, 'language') },
         { from: path.join(__dirname, '..', '..', 'static/icon.png'), to: path.join(outdir, 'static/icon.png') },
         { from: path.join(__dirname, '..', '..', '.vscodeignore'), to: path.join(outdir, '.vscodeignore'), toType: 'file' },
@@ -117,6 +120,7 @@ module.exports = () => {
       new webpack.ProgressPlugin(),
       new webpack.DefinePlugin({
         'process.env.PRODUCT': JSON.stringify(config.name),
+        'process.env.DSN_KEY': JSON.stringify((config.name === 'ext' ? process.env.EXT_DSN_KEY : process.env.LS_DSN_KEY) || ''),
         'process.env.VERSION': JSON.stringify(extPkgJson.version),
         'process.env.EXT_NAME': JSON.stringify(EXT_NAME),
         'process.env.DISPLAY_NAME': JSON.stringify(DISPLAY_NAME),
@@ -130,8 +134,12 @@ module.exports = () => {
       )
     ].concat(config.plugins || []);
     config.node = {
-      ...(config.node || {}),
       __dirname: false,
+      __filename: false,
+      fs: 'empty',
+      net: 'empty',
+      child_process: 'empty',
+      ...(config.node || {}),
     };
 
     config.optimization = config.optimization || {};

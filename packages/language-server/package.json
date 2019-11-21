@@ -1,6 +1,6 @@
 {
   "name": "@sqltools/language-server",
-  "version": "0.21.1",
+  "version": "0.21.3",
   "description": "SQLTools Language Server",
   "main": "index.ts",
   "author": "Matheus Teixeira <me@mteixeira.me>",
@@ -23,6 +23,6 @@
     "jest": "^24.5.0",
     "jest-cli": "^24.5.0",
     "ts-jest": "^24.0.2",
-    "typescript": "^3.4.1"
+    "typescript": "3.6.2"
   }
 }

@@ -8,12 +8,12 @@ import { DatabaseInterface } from '@sqltools/core/plugin-api';
  *
  * @export
  * @param {string} query
- * @param {('pg' | 'mysql' | 'mssql')} [dialect='mysql']
+ * @param {('pg' | 'mysql' | 'mssql')} [driver='mysql']
  * @param {string} [delimiter=';']
  * @returns {string[]}
  */
-export function parse(query: string, dialect: 'pg' | 'mysql' | 'mssql' | 'cql' = 'mysql'): string[] {
-  return multipleQueriesParse(query, dialect);
+export function parse(query: string, driver: 'pg' | 'mysql' | 'mssql' | 'cql' = 'mysql'): string[] {
+  return multipleQueriesParse(query, driver);
   // return fixedQuery.split(/\s*;\s*(?=([^']*'[^']*')*[^']*$)/g).filter((v) => !!v && !!`${v}`.trim()).map(v => `${v};`);
 }
 /**
@@ -71,7 +71,6 @@ export function getQueryParameters(query: string, regexStr: string) {
 
   let match;
   while ((match = regex.exec(query)) !== null) {
-    console.log(`Found ${match[0]}. Next starts at ${regex.lastIndex}.`);
     const queryPart = query.substring(Math.max(0, regex.lastIndex - 15), Math.min(query.length, regex.lastIndex + 15)).replace(/[\r\n]/g, '').replace(/\s+/g, ' ').trim();
     if (!paramsMap[match[0]]) {
       paramsMap[match[0]] = {

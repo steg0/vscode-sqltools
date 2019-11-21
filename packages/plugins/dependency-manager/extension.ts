@@ -1,9 +1,10 @@
 import { window as Win, workspace, ConfigurationTarget, window, ProgressLocation, commands } from 'vscode';
 import { InstallDepRequest, MissingModuleNotification, ElectronNotSupportedNotification, DependeciesAreBeingInstalledNotification } from '@sqltools/plugins/dependency-manager/contracts';
 import SQLTools from '@sqltools/core/plugin-api';
-import { ConnectRequest } from '@sqltools/plugins/connection-manager/contracts';
-import { openExternal } from '@sqltools/core/utils/vscode';
+import { openExternal } from '@sqltools/vscode/utils';
 import { EXT_NAME, DOCS_ROOT_URL } from '@sqltools/core/constants';
+import { getConnectionId } from '@sqltools/core/utils';
+import ConfigManager from '@sqltools/core/config-manager';
 
 export default class DependencyManager implements SQLTools.ExtensionPlugin {
   public client: SQLTools.LanguageClientInterface;
@@ -18,7 +19,7 @@ export default class DependencyManager implements SQLTools.ExtensionPlugin {
 
   private electronNotSupported = async () => {
     const r = await Win.showInformationMessage(
-      'Electron is not supported. You should enable \'sqltools.useNodeRuntime\' and have NodeJS installed to continue.',
+      'VSCode engine is not supported. You should enable \'sqltools.useNodeRuntime\' and have NodeJS installed to continue.',
       'Enable now',
     );
     if (!r) return;
@@ -31,51 +32,49 @@ export default class DependencyManager implements SQLTools.ExtensionPlugin {
     commands.executeCommand('workbench.action.reloadWindow');
   }
 
-  private installingDialects: string[] = [];
+  private installingDrivers: string[] = [];
   private requestToInstall = async ({ moduleName, moduleVersion, conn, action = 'install' }) => {
     conn = conn || {};
-    const installNow = 'Install now';
+    const installNow = action === 'upgrade' ? 'Upgrade now' : 'Install now';
     const readMore = 'Read more';
     const options = [readMore, installNow];
+    const dependencyManagerSettings = ConfigManager.dependencyManager;
+    const autoUpdateOrInstall = dependencyManagerSettings && dependencyManagerSettings.autoAccept;
     try {
-      const r = action === 'upgrade' ? installNow : await Win.showInformationMessage(
+      const r = autoUpdateOrInstall ? installNow : await Win.showInformationMessage(
         `You need to ${action} "${moduleName}@${moduleVersion}" to connect to ${conn.name}.`,
         ...options,
       );
       switch (r) {
         case installNow:
-          this.installingDialects.push(conn.dialect);
+          this.installingDrivers.push(conn.driver);
           await window.withProgress({
             location: ProgressLocation.Notification,
-            title: `SQLTools is ${action === 'upgrade' ? 'upgrading deps' : 'installing'}`,
+            title: 'SQLTools',
             cancellable: false,
           }, async (progress) => {
-            progress.report({ message: `${this.installingDialects.join(', ')} dependencies` });
-            const interval = setInterval(() => {
-              progress.report({ message: `${this.installingDialects.join(', ')} dependencies` });
-            }, 1000);
-            const result = await this.client.sendRequest(InstallDepRequest, { dialect: conn.dialect });
-            clearInterval(interval);
+            progress.report({ message: `${action === 'upgrade' ? 'upgrading' : 'installing'} ${this.installingDrivers.join(', ')} dependencies` });
+            const result = await this.client.sendRequest(InstallDepRequest, { driver: conn.driver });
             return result;
           });
-          this.installingDialects = this.installingDialects.filter(v => v !== conn.dialect);
+          this.installingDrivers = this.installingDrivers.filter(v => v !== conn.driver);
           const opt = conn.name ? [`Connect to ${conn.name}`] : [];
-          const rr = await Win.showInformationMessage(
+          const rr = conn.name && autoUpdateOrInstall ? opt[0] : await Win.showInformationMessage(
             `"${moduleName}@${moduleVersion}" installed!\n
 Go ahead and connect!`,
             ...opt
           );
           if (rr === opt[0]) {
-            await this.client.sendRequest(ConnectRequest, { conn });
+            await commands.executeCommand(`${EXT_NAME}.selectConnection`, getConnectionId(conn));
           }
           break;
         case readMore:
-          openExternal(`${DOCS_ROOT_URL}/connections/${conn.dialect ? conn.dialect.toLowerCase() : ''}`);
+          openExternal(`${DOCS_ROOT_URL}/driver/${conn.driver ? conn.driver.toLowerCase() : ''}`);
           break;
       }
     } catch (error) {
-      this.installingDialects = this.installingDialects.filter(v => v !== conn.dialect);
-      this.extension.errorHandler(`Failed to install dependencies for ${conn.dialect}:`, error);
+      this.installingDrivers = this.installingDrivers.filter(v => v !== conn.driver);
+      this.extension.errorHandler(`Failed to install dependencies for ${conn.driver}:`, error);
     }
   }
 

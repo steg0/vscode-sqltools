@@ -1,6 +1,6 @@
 import ConfigManager from '@sqltools/core/config-manager';
 import { EXT_NAME, TREE_SEP } from '@sqltools/core/constants';
-import { ConnectionInterface, DatabaseDialect } from '@sqltools/core/interface';
+import { ConnectionInterface, DatabaseDriver } from '@sqltools/core/interface';
 import { getConnectionId, asArray, getNameFromId } from '@sqltools/core/utils';
 import { SidebarTreeItem } from '@sqltools/plugins/connection-manager/explorer/tree-items';
 import SidebarFunction from "@sqltools/plugins/connection-manager/explorer/SidebarFunction";
@@ -9,16 +9,29 @@ import SidebarTableOrView from "@sqltools/plugins/connection-manager/explorer/Si
 import SidebarResourceGroup from "@sqltools/plugins/connection-manager/explorer/SidebarResourceGroup";
 import SidebarConnection from "@sqltools/plugins/connection-manager/explorer/SidebarConnection";
 import SidebarAbstractItem from "@sqltools/plugins/connection-manager/explorer/SidebarAbstractItem";
-import { EventEmitter, TreeDataProvider, TreeItem, TreeView, window, TreeItemCollapsibleState, commands } from 'vscode';
+import { EventEmitter, TreeDataProvider, TreeItem, TreeView, window, TreeItemCollapsibleState, commands, ThemeIcon } from 'vscode';
 import SQLTools, { DatabaseInterface } from '@sqltools/core/plugin-api';
 import safeGet from 'lodash/get';
-import logger from '@sqltools/core/log/vscode';
+import sortBy from 'lodash/sortBy';
+import logger from '@sqltools/core/log';
 
-const DialectHierarchyChildNames = {
-  [DatabaseDialect.PostgreSQL]: ['Database', 'Schema'],
-  [DatabaseDialect['AWS Redshift']]: ['Database', 'Schema'],
-  [DatabaseDialect.Cassandra]: ['Keyspace'],
+const log = logger.extend('conn-man:explorer');
+
+const DriverHierarchyChildNames = {
+  [DatabaseDriver.PostgreSQL]: ['Database', 'Schema'],
+  [DatabaseDriver['AWS Redshift']]: ['Database', 'Schema'],
+  [DatabaseDriver.Cassandra]: ['Keyspace'],
 }
+
+type ConnectionGroup = TreeItem & { items?: TreeItem[]; isGroup?: boolean };
+
+const connectedTreeItem: ConnectionGroup = new TreeItem('Connected', TreeItemCollapsibleState.Expanded);
+connectedTreeItem.id = 'CONNECTED'
+connectedTreeItem.iconPath = ThemeIcon.Folder;
+
+const notConnectedTreeItem: ConnectionGroup = new TreeItem('Not Connected', TreeItemCollapsibleState.Expanded);
+notConnectedTreeItem.id = 'DISCONNECTED';
+notConnectedTreeItem.iconPath = ThemeIcon.Folder;
 
 
 export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
@@ -58,7 +71,44 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
       };
       return [addNew];
     }
-    return items;
+
+    connectedTreeItem.items = [];
+    notConnectedTreeItem.items = [];
+    let connectedTreeCount = 0;
+    let notConnectedTreeCount = 0;
+    items.forEach(item => {
+      let group: ConnectionGroup = null;
+      if (item.isConnected) {
+        group = connectedTreeItem;
+        connectedTreeCount++;
+      } else {
+        group = notConnectedTreeItem;
+        notConnectedTreeCount++
+      }
+      if (item.conn && item.conn.group) {
+        const groupId = `GID:${item.isConnected ? 'C' : 'N'}:${item.conn.group}`;
+        let subGroup: ConnectionGroup = group.items.find((it: TreeItem) => it.id === groupId);
+        if (!subGroup) {
+          subGroup = new TreeItem(item.conn.group, TreeItemCollapsibleState.Expanded);
+          subGroup.isGroup = true;
+          subGroup.id = groupId;
+          subGroup.items = subGroup.items || [];
+          subGroup.iconPath = ThemeIcon.Folder;
+          group.items.push(subGroup);
+        }
+        subGroup.description = `${subGroup.items.length + 1} connections`;
+        group = subGroup;
+      }
+      group.items.push(item);
+    });
+
+    connectedTreeItem.items = sortBy(connectedTreeItem.items, ['isGroup', 'label']);
+    notConnectedTreeItem.items = sortBy(notConnectedTreeItem.items, ['isGroup', 'label']);
+
+    notConnectedTreeItem.description = `${notConnectedTreeCount} connections`;
+    connectedTreeItem.description = `${connectedTreeCount} connections`;
+
+    return [connectedTreeItem, notConnectedTreeItem].filter(a => a.items.length > 0);
   }
   public async getChildren(element?: SidebarTreeItem) {
     if (!element) {
@@ -76,7 +126,7 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
   }
   public refresh(item?: SidebarTreeItem) {
     this._onDidChangeTreeData.fire(item);
-    logger.debug(`Connection explorer updated. ${item ? `Updated ${item.label}` : ''}`.trim());
+    log.extend('debug')(`Connection explorer updated. ${item ? `Updated ${item.label}` : ''}`.trim());
 
   }
 
@@ -129,11 +179,11 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
       return;
     }
 
-    this.insertTables(connId, conn.dialect, tables);
+    this.insertTables(connId, conn.driver, tables);
 
-    this.insertColumns(connId, conn.dialect, columns);
+    this.insertColumns(connId, conn.driver, columns);
 
-    this.insertFunctions(connId, conn.dialect, functions);
+    this.insertFunctions(connId, conn.driver, functions);
 
     this.refresh(this.tree[connId]);
   }
@@ -142,10 +192,10 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
     return safeGet(this.tree, k.reduce((agg, v, i) => ([ ...agg, v, ...(i === k.length - 1 ? [] : ['tree'])]), []));
   }
 
-  private getOrCreateGroups(connId: string, dialect: DatabaseDialect, path: string, ignoreLasts: number = 0): SidebarAbstractItem {
+  private getOrCreateGroups(connId: string, driver: DatabaseDriver, path: string, ignoreLasts: number = 0): SidebarAbstractItem {
     try {
       let k = path.split(TREE_SEP);
-      const hierachyNames = DialectHierarchyChildNames[dialect] || [];
+      const hierachyNames = DriverHierarchyChildNames[driver] || [];
       if (ignoreLasts > 0) {
         k = k.slice(0, k.length - ignoreLasts);
       }
@@ -162,99 +212,99 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
       const group = tree.tree[created.pop()];
 
       if (!group) {
-        throw new Error(`Can't create tree '${path}' to dialect '${getNameFromId(connId || '') || connId}'`);
+        throw new Error(`Can't create tree '${path}' to driver '${getNameFromId(connId || '') || connId}'`);
       }
 
       return group;
     } catch (error) {
-      throw new Error(`Can't create tree '${path}' to dialect '${getNameFromId(connId || '') || connId}'`);
+      throw new Error(`Can't create tree '${path}' to driver '${getNameFromId(connId || '') || connId}'`);
     }
   }
 
-  private insertTables(connId: string, dialect: DatabaseDialect, tables: DatabaseInterface.Table[]) {
+  private insertTables(connId: string, driver: DatabaseDriver, tables: DatabaseInterface.Table[]) {
     try {
-      switch (dialect) {
-        case DatabaseDialect.DB2:
-        case DatabaseDialect.PostgreSQL:
-        case DatabaseDialect['AWS Redshift']:
-        case DatabaseDialect.SQLite:
-        case DatabaseDialect.MySQL:
-        case DatabaseDialect.MSSQL:
-        case DatabaseDialect.OracleDB:
-        case DatabaseDialect.SAPHana:
-        case DatabaseDialect.Cassandra:
+      switch (driver) {
+        case DatabaseDriver.DB2:
+        case DatabaseDriver.PostgreSQL:
+        case DatabaseDriver['AWS Redshift']:
+        case DatabaseDriver.SQLite:
+        case DatabaseDriver.MySQL:
+        case DatabaseDriver.MSSQL:
+        case DatabaseDriver.OracleDB:
+        case DatabaseDriver.SAPHana:
+        case DatabaseDriver.Cassandra:
           tables.sort((a, b) => a.name.localeCompare(b.name)).forEach((item) => {
-            this.getOrCreateGroups(connId, dialect, item.tree, 1).addItem(new SidebarTableOrView(this.extension.context, item));
+            this.getOrCreateGroups(connId, driver, item.tree, 1).addItem(new SidebarTableOrView(this.extension.context, item));
           });
           break;
         default:
           // old style. Compatibily
           tables.sort((a, b) => a.name.localeCompare(b.name)).forEach((item) => {
             const key = item.isView ? 'views' : 'tables';
-            this.getOrCreateGroups(connId, dialect, key).addItem(new SidebarTableOrView(this.extension.context, item));
+            this.getOrCreateGroups(connId, driver, key).addItem(new SidebarTableOrView(this.extension.context, item));
           });
           break;
       }
     } catch (error) {
-      this.extension.errorHandler(`Error while trying to create tables tree for ${dialect}`, error);
+      this.extension.errorHandler(`Error while trying to create tables tree for ${driver}`, error);
     }
   }
 
-  private insertColumns(connId: string, dialect: DatabaseDialect, columns: DatabaseInterface.TableColumn[]) {
+  private insertColumns(connId: string, driver: DatabaseDriver, columns: DatabaseInterface.TableColumn[]) {
     try {
       if (ConfigManager.sortColumns && ConfigManager.sortColumns === 'name') {
         columns = columns.sort((a, b) => a.columnName.localeCompare(b.columnName));
       } else if (ConfigManager.sortColumns && ConfigManager.sortColumns === 'ordinalnumber') { /* it's already sorted by position */}
-      switch (dialect) {
-        case DatabaseDialect.DB2:
-        case DatabaseDialect.PostgreSQL:
-        case DatabaseDialect['AWS Redshift']:
-        case DatabaseDialect.SQLite:
-        case DatabaseDialect.MySQL:
-        case DatabaseDialect.MSSQL:
-        case DatabaseDialect.OracleDB:
-        case DatabaseDialect.SAPHana:
-        case DatabaseDialect.Cassandra:
+      switch (driver) {
+        case DatabaseDriver.DB2:
+        case DatabaseDriver.PostgreSQL:
+        case DatabaseDriver['AWS Redshift']:
+        case DatabaseDriver.SQLite:
+        case DatabaseDriver.MySQL:
+        case DatabaseDriver.MSSQL:
+        case DatabaseDriver.OracleDB:
+        case DatabaseDriver.SAPHana:
+        case DatabaseDriver.Cassandra:
           columns.forEach((column) => {
-            this.getOrCreateGroups(connId, dialect, column.tree, 1).addItem(new SidebarColumn(this.extension.context, column));
+            this.getOrCreateGroups(connId, driver, column.tree, 1).addItem(new SidebarColumn(this.extension.context, column));
           });
           break;
         default:
           // old style. Compatibily
           columns.forEach((column) => {
             const key = this.getGroup(connId, 'views', column.tableName) ? 'views' : 'tables';
-            this.getOrCreateGroups(connId, dialect, `${key}/${column.tableName}`).addItem(new SidebarColumn(this.extension.context, column));
+            this.getOrCreateGroups(connId, driver, `${key}/${column.tableName}`).addItem(new SidebarColumn(this.extension.context, column));
           });
           break;
       }
     } catch (error) {
-      this.extension.errorHandler(`Error while trying to create columns tree for ${dialect}`, error);
+      this.extension.errorHandler(`Error while trying to create columns tree for ${driver}`, error);
     }
   }
 
-  private insertFunctions(connId: string, dialect: DatabaseDialect, functions: DatabaseInterface.Function[]) {
+  private insertFunctions(connId: string, driver: DatabaseDriver, functions: DatabaseInterface.Function[]) {
     try {
-      switch (dialect) {
-        case DatabaseDialect.DB2:
-        case DatabaseDialect.PostgreSQL:
-        case DatabaseDialect['AWS Redshift']:
-        case DatabaseDialect.MySQL:
-        case DatabaseDialect.MSSQL:
-        case DatabaseDialect.OracleDB:
-        case DatabaseDialect.Cassandra:
+      switch (driver) {
+        case DatabaseDriver.DB2:
+        case DatabaseDriver.PostgreSQL:
+        case DatabaseDriver['AWS Redshift']:
+        case DatabaseDriver.MySQL:
+        case DatabaseDriver.MSSQL:
+        case DatabaseDriver.OracleDB:
+        case DatabaseDriver.Cassandra:
           functions.forEach((fn) => {
-            this.getOrCreateGroups(connId, dialect, fn.tree, 1).addItem(new SidebarFunction(this.extension.context, fn));
+            this.getOrCreateGroups(connId, driver, fn.tree, 1).addItem(new SidebarFunction(this.extension.context, fn));
           });
           break;
         default:
           // old style. Compatibily
           functions.forEach((fn) => {
-            this.getOrCreateGroups(connId, dialect, `functions/${fn.name}`).addItem(new SidebarFunction(this.extension.context, fn));
+            this.getOrCreateGroups(connId, driver, `functions/${fn.name}`).addItem(new SidebarFunction(this.extension.context, fn));
           });
           break;
       }
     } catch (error) {
-      this.extension.errorHandler(`Error while trying to create functions tree for ${dialect}`, error);
+      this.extension.errorHandler(`Error while trying to create functions tree for ${driver}`, error);
     }
   }
 
@@ -289,8 +339,12 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
     this.setConnections(connections);
   }
 
+  public getSelection() {
+    return this.treeView.selection;
+  }
+
   public constructor(private extension: SQLTools.ExtensionInterface) {
-    this.treeView = window.createTreeView(`${EXT_NAME}/connectionExplorer`, { treeDataProvider: this });
+    this.treeView = window.createTreeView(`${EXT_NAME}/connectionExplorer`, { treeDataProvider: this, canSelectMany: true });
     ConfigManager.addOnUpdateHook(this.updateTreeRoot);
     this.updateTreeRoot();
     this.extension.context.subscriptions.push(this.treeView);

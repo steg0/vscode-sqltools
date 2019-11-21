@@ -1,16 +1,10 @@
 import { EXT_NAME } from '@sqltools/core/constants';
 import { getConnectionId } from '@sqltools/core/utils';
 import WebviewProvider from '@sqltools/plugins/connection-manager/screens/provider';
-import { commands, ExtensionContext, Uri, workspace } from 'vscode';
+import { commands, ExtensionContext, Uri } from 'vscode';
 import path from 'path';
-import { DatabaseDialect } from '@sqltools/core/interface';
-
-const relativeToWorkspace = (file: string) => {
-  const fileUri = workspace.asRelativePath(Uri.file(file), true);
-  if (file === fileUri) return file;
-  if (fileUri.startsWith('/') || fileUri.startsWith('.//')) return file;
-  return `.${path.sep}${fileUri}`;
-}
+import { DatabaseDriver } from '@sqltools/core/interface';
+import relativeToWorkspace from '@sqltools/vscode/utils/relative-to-workspace';
 
 export default class SettingsWebview extends WebviewProvider {
   protected id: string = 'Settings';
@@ -19,8 +13,8 @@ export default class SettingsWebview extends WebviewProvider {
   constructor(context: ExtensionContext) {
     super(
       context,
-      Uri.file(path.join(context.extensionPath, 'icons')).with({ scheme: 'vscode-resource' }),
-      Uri.file(path.join(context.extensionPath, 'ui')).with({ scheme: 'vscode-resource' })
+      Uri.file(path.resolve(context.extensionPath, 'icons')).with({ scheme: 'vscode-resource' }),
+      Uri.file(path.resolve(context.extensionPath, 'ui')).with({ scheme: 'vscode-resource' })
     );
     this.setMessageCallback(({ action, payload }) => {
       switch (action) {
@@ -30,6 +24,8 @@ export default class SettingsWebview extends WebviewProvider {
           return this.updateConnection(payload);
         case 'testConnection':
           return this.testConnection(payload);
+        case 'openConnectionFile':
+          this.openConnectionFile();
         default:
         break;
       }
@@ -37,7 +33,7 @@ export default class SettingsWebview extends WebviewProvider {
   }
 
   private updateConnection = async ({ connInfo, globalSetting, transformToRelative, editId }) => {
-    if (connInfo.dialect === DatabaseDialect.SQLite && transformToRelative) {
+    if (connInfo.driver === DatabaseDriver.SQLite && transformToRelative) {
       connInfo.database = relativeToWorkspace(connInfo.database);
     }
     return commands.executeCommand(`${EXT_NAME}.updateConnection`, editId, connInfo, globalSetting ? 'Global' : undefined)
@@ -52,7 +48,7 @@ export default class SettingsWebview extends WebviewProvider {
   }
 
   private createConnection = async ({ connInfo, globalSetting, transformToRelative }) => {
-    if (connInfo.dialect === DatabaseDialect.SQLite && transformToRelative) {
+    if (connInfo.driver === DatabaseDriver.SQLite && transformToRelative) {
       connInfo.database = relativeToWorkspace(connInfo.database);
     }
     return commands.executeCommand(`${EXT_NAME}.addConnection`, connInfo, globalSetting ? 'Global' : undefined)
@@ -67,7 +63,7 @@ export default class SettingsWebview extends WebviewProvider {
   }
 
   private testConnection = async ({ connInfo }) => {
-    if (connInfo.dialect === DatabaseDialect.SQLite) {
+    if (connInfo.driver === DatabaseDriver.SQLite) {
       connInfo.database = relativeToWorkspace(connInfo.database);
     }
     return commands.executeCommand(`${EXT_NAME}.testConnection`, connInfo)
@@ -83,5 +79,9 @@ export default class SettingsWebview extends WebviewProvider {
       }
       this.postMessage({ action: 'testConnectionError', payload });
     });
+  }
+
+  private openConnectionFile = async () => {
+    return commands.executeCommand('workbench.action.openSettings', 'sqltools.connections');
   }
 }

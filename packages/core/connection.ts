@@ -1,20 +1,24 @@
+// @TODO MOVE FILE TO LANGUAGE SERVER
+
 import { getConnectionId } from './utils';
-import Dialects from './dialect';
+import Drivers from '@sqltools/drivers';
 import {
-  ConnectionDialect,
+  ConnectionDriver,
   ConnectionInterface,
 } from './interface';
-import SQLTools, { DatabaseInterface } from './plugin-api';
+import { DatabaseInterface } from './plugin-api';
 import { decorateException } from './utils/errors';
+import telemetry from '@sqltools/core/utils/telemetry';
+import ConfigManager from './config-manager';
 
 export default class Connection {
   private tables: DatabaseInterface.Table[] = [];
   private columns: DatabaseInterface.TableColumn[] = [];
   private functions: DatabaseInterface.Function[] = [];
   private connected: boolean = false;
-  private conn: ConnectionDialect;
-  constructor(private credentials: ConnectionInterface, private telemetry: SQLTools.TelemetryInterface) {
-    this.conn = new Dialects[credentials.dialect](this.credentials);
+  private conn: ConnectionDriver;
+  constructor(private credentials: ConnectionInterface) {
+    this.conn = new Drivers[credentials.driver](this.credentials);
   }
 
   private decorateException = (e: Error) => {
@@ -93,14 +97,19 @@ export default class Connection {
     }
     return info;
   }
-  public async showRecords(tableName: string, globalLimit: number) {
-    const limit = this.conn.credentials.previewLimit || globalLimit || 50;
-    const records = await this.conn.showRecords(tableName, limit).catch(this.decorateException);
+  public async showRecords(tableName: string, page: number = 0) {
+    const limit = this.conn.credentials.previewLimit || (ConfigManager.results && ConfigManager.results.limit) || 50;
 
-    if (records[0]) {
-      records[0].label = `Showing ${Math.min(limit, records[0].results.length || 0)} ${tableName} records`;
+    const [records] = await this.conn.showRecords(tableName, limit, page).catch(this.decorateException);
+
+    let totalPart = '';
+    if (typeof records.total === 'number') {
+      totalPart = `of ${records.total}`;
     }
-    return records;
+    if (records) {
+      records.label = `Showing ${Math.min(limit, records.results.length || 0)} ${totalPart}${tableName} records`;
+    }
+    return [records];
   }
 
   public query(query: string, throwIfError: boolean = false): Promise<DatabaseInterface.QueryResults[]> {
@@ -108,7 +117,7 @@ export default class Connection {
       .catch(this.decorateException)
       .catch((e) => {
         if (throwIfError) throw e;
-        this.telemetry.registerException(e, { dialect: this.conn.credentials.dialect });
+        telemetry.registerException(e, { driver: this.conn.credentials.driver });
         let message = '';
         if (typeof e === 'string') {
           message = e;
@@ -145,8 +154,8 @@ export default class Connection {
     return this.conn.credentials.database;
   }
 
-  public getDialect() {
-    return this.conn.credentials.dialect;
+  public getDriver() {
+    return this.conn.credentials.driver;
   }
 
   public getId() {
@@ -161,8 +170,8 @@ export default class Connection {
     };
   }
 
-  public static async testConnection(credentials: ConnectionInterface, telemetry: SQLTools.TelemetryInterface) {
-    const testConn = new Connection(credentials, telemetry);
+  public static async testConnection(credentials: ConnectionInterface) {
+    const testConn = new Connection(credentials);
     await testConn.connect();
     await testConn.close();
     return true;
