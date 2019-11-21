@@ -58,25 +58,49 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
           const results: DatabaseInterface.QueryResults[] = [];
           for (let q of queries) {
             try {
-              let res = thiz.queryResultSync(database, q);
-              let row;
-              let dataSet = []
-              while (row = res.fetchSync()) {
-                dataSet.push(row)
+              if (thiz.isNonQuery(q)) {
+                let stmt = database.prepareSync(q);
+                stmt.executeNonQuery([], (err, res) => {
+                  if (err) {
+                    reject(err);
+                  }
+                  else {
+                    results.push({
+                      connId: thiz.getId(),
+                      cols: [],
+                      messages: [`${res} rows were affected.`],
+                      query: q,
+                      results: [],
+                    });
+                    if (results.length == queries.length) {
+                      resolve(results);
+                    }
+                  }
+                });
               }
-              results.push({
-                connId: thiz.getId(),
-                cols: dataSet && dataSet.length > 0 ? Object.keys(dataSet[0]) : [],
-                messages: [],
-                query: q,
-                results: dataSet,
-              })
+              else {
+                let res = thiz.queryResultSync(database, q);
+                let row;
+                let dataSet = []
+                while (row = res.fetchSync()) {
+                  dataSet.push(row)
+                }
+                results.push({
+                  connId: thiz.getId(),
+                  cols: dataSet && dataSet.length > 0 ? Object.keys(dataSet[0]) : [],
+                  messages: [],
+                  query: q,
+                  results: dataSet,
+                })
+                if (results.length == queries.length) {
+                  resolve(results);
+                }
+              }
             }
             catch (err) {
               reject(err)
             }
           }
-          resolve(results);
         }
         finally {
           if (database) {
@@ -214,6 +238,10 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
       throw this.getError(result)
     }
     return result;
+  }
+  
+  private isNonQuery(query: string): boolean {
+    return /^insert|update|delete/i.test(query);
   }
 
   private hasError(result: db2Lib.ODBCResult): boolean {
