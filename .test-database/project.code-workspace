@@ -214,6 +214,15 @@
         "connectString": "DATABASE=devel;HOSTNAME=lx3;UID=rsdb;PWD=k8belka200;PORT=50000;PROTOCOL=TCPIP;AUTOCOMMIT=0",
         "dialect": "DB2",
         "name": "devel@db2inst1@lx3"
+      },
+      {
+        "database": "rs",
+        "dialect": "MySQL",
+        "name": "rs@localhost",
+        "password": "k8belka200",
+        "port": 3306,
+        "server": "localhost",
+        "username": "rs"
       }
     ],
     "sqltools.languageServerEnv": {
