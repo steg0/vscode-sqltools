@@ -48,66 +48,70 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
     })
   }
 
+  private async queryByQuery(
+    database: db2Lib.Database, 
+    queries: string[],
+    results: DatabaseInterface.QueryResults[],
+    resolve,
+    reject
+  ) {
+    let thiz: DB2 = this;
+    if (queries.length==0) {
+      database.close();
+      resolve(results);
+      return;
+    }
+    let q = queries[0];
+    try {
+      if (thiz.isNonQuery(q)) {
+        let stmt = database.prepareSync(q);
+        stmt.executeNonQuery([], (err: Error, res: any[]) => {
+          if (err) {
+            database.close();
+            reject(err);
+          }
+          else {
+            results.push({
+              connId: thiz.getId(),
+              cols: [],
+              messages: [`${res} rows were affected.`],
+              query: '',
+              results: [],
+            });
+            this.queryByQuery(database, queries.slice(1), results, resolve, reject);
+          }
+        });
+      }
+      else {
+        let res = thiz.queryResultSync(database, q);
+        let row;
+        let dataSet = []
+        while (row = res.fetchSync()) {
+          dataSet.push(row);
+        }
+        results.push({
+          connId: thiz.getId(),
+          cols: dataSet && dataSet.length > 0 ? Object.keys(dataSet[0]) : [],
+          messages: [],
+          query: q,
+          results: dataSet,
+        });
+        this.queryByQuery(database, queries.slice(1), results, resolve, reject);
+      }
+    }
+    catch (err) {
+      reject(err);
+      database.close();
+    }
+  }
+
   public async query(query: string): Promise<DatabaseInterface.QueryResults[]> {
     let thiz: DB2 = this;
     const database = await thiz.open();
-    return new Promise<DatabaseInterface.QueryResults[]>(
-      function (resolve, reject) {
-        try {
-          const queries = Utils.query.parse(query)
-          const results: DatabaseInterface.QueryResults[] = [];
-          for (let q of queries) {
-            try {
-              if (thiz.isNonQuery(q)) {
-                let stmt = database.prepareSync(q);
-                stmt.executeNonQuery([], (err, res) => {
-                  if (err) {
-                    reject(err);
-                  }
-                  else {
-                    results.push({
-                      connId: thiz.getId(),
-                      cols: [],
-                      messages: [`${res} rows were affected.`],
-                      query: q,
-                      results: [],
-                    });
-                    if (results.length == queries.length) {
-                      resolve(results);
-                    }
-                  }
-                });
-              }
-              else {
-                let res = thiz.queryResultSync(database, q);
-                let row;
-                let dataSet = []
-                while (row = res.fetchSync()) {
-                  dataSet.push(row)
-                }
-                results.push({
-                  connId: thiz.getId(),
-                  cols: dataSet && dataSet.length > 0 ? Object.keys(dataSet[0]) : [],
-                  messages: [],
-                  query: q,
-                  results: dataSet,
-                })
-                if (results.length == queries.length) {
-                  resolve(results);
-                }
-              }
-            }
-            catch (err) {
-              reject(err)
-            }
-          }
-        }
-        finally {
-          if (database) {
-            database.close()
-          }
-        }
-      });
+    const queries = Utils.query.parse(query);
+    return new Promise(function(resolve, reject) {
+      thiz.queryByQuery(database, queries, [], resolve, reject);
+    });
   }
 
   public async testConnection(): Promise<void> {
