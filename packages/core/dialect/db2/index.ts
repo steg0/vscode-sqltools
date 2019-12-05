@@ -51,36 +51,35 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
   private async queryByQuery(
     database: db2Lib.Database, 
     queries: string[],
-    results: DatabaseInterface.QueryResults[],
-    resolve,
-    reject
-  ) {
+    results: DatabaseInterface.QueryResults[]
+  ): Promise<DatabaseInterface.QueryResults[]> {
     let thiz: DB2 = this;
     if (queries.length==0) {
       database.close();
-      resolve(results);
-      return;
+      return Promise.resolve(results);
     }
     let q = queries[0];
     try {
       if (thiz.isNonQuery(q)) {
         let stmt = database.prepareSync(q);
-        stmt.executeNonQuery([], (err: Error, res: any[]) => {
-          if (err) {
-            database.close();
-            reject(err);
-          }
-          else {
-            results.push({
-              connId: thiz.getId(),
-              cols: [],
-              messages: [`${res} rows were affected.`],
-              query: '',
-              results: [],
-            });
-            this.queryByQuery(database, queries.slice(1), results, resolve, reject);
-          }
-        });
+        return new Promise(function(resolve, reject) {
+          stmt.executeNonQuery([], (err: Error, res: any[]) => {
+            if (err) {
+              database.close();
+              reject(err);
+            }
+            else {
+              results.push({
+                connId: thiz.getId(),
+                cols: [],
+                messages: [`${res} rows were affected.`],
+                query: q,
+                results: [],
+              });
+              thiz.queryByQuery(database, queries.slice(1), results).then(() => { resolve(results); });
+            }
+          });
+        })
       }
       else {
         let res = thiz.queryResultSync(database, q);
@@ -96,12 +95,12 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
           query: q,
           results: dataSet,
         });
-        this.queryByQuery(database, queries.slice(1), results, resolve, reject);
+        return thiz.queryByQuery(database, queries.slice(1), results);
       }
     }
     catch (err) {
-      reject(err);
       database.close();
+      return Promise.reject(err);
     }
   }
 
@@ -109,9 +108,7 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
     let thiz: DB2 = this;
     const database = await thiz.open();
     const queries = Utils.query.parse(query);
-    return new Promise(function(resolve, reject) {
-      thiz.queryByQuery(database, queries, [], resolve, reject);
-    });
+    return thiz.queryByQuery(database, queries, []);
   }
 
   public async testConnection(): Promise<void> {
