@@ -242,7 +242,7 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
   }
   
   private isNonQuery(query: string): boolean {
-    return /^insert|update|delete/i.test(query);
+    return /^insert|update|merge|delete/i.test(query);
   }
 
   private hasError(result: db2Lib.ODBCResult): boolean {
