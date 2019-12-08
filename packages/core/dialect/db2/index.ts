@@ -244,7 +244,7 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
   private isNonQuery(query: string): boolean {
     const commentsAndQuotes = /([^\/\-\']*)(?:\'[^\']*\'|\-\-[^\n]*\n|\/\*(?:[^\*]|\*(?!\/))*\*\/)/g;
     let remainder = query.replace(commentsAndQuotes, '');
-    const nonQueryStatement = /^(?:insert|update|merge|delete)/i;
+    const nonCteNonQuery = /^(?:insert|update|merge|delete)/i;
     if (/^with/i.test(remainder)) {
       while (remainder.length>0) {
         remainder = remainder.replace(/^[^\(]*\(/, '');
@@ -256,10 +256,10 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
           }
         }
         remainder=remainder.slice(i).trim();
-        if (nonQueryStatement.test(remainder)) return true;
+        if (nonCteNonQuery.test(remainder)) return true;
       }
     }
-    return nonQueryStatement.test(remainder);
+    return nonCteNonQuery.test(remainder);
   }
 
   private hasError(result: db2Lib.ODBCResult): boolean {
