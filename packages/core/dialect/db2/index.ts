@@ -242,24 +242,7 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
   }
   
   private isNonQuery(query: string): boolean {
-    const commentsAndQuotes = /([^\/\-\']*)(?:\'[^\']*\'|\-\-[^\n]*\n|\/\*(?:[^\*]|\*(?!\/))*\*\/)/g;
-    let remainder = query.replace(commentsAndQuotes, '');
-    const nonCteNonQuery = /^(?:insert|update|merge|delete)/i;
-    if (/^with/i.test(remainder)) {
-      while (remainder.length>0) {
-        remainder = remainder.replace(/^[^\(]*\(/, '');
-        let i=0;
-        for (let level=1; level>0 && i<remainder.length; i++) {
-          switch (remainder[i]) {
-            case '(': level++; break;
-            case ')': level--;
-          }
-        }
-        remainder=remainder.slice(i).trim();
-        if (nonCteNonQuery.test(remainder)) return true;
-      }
-    }
-    return nonCteNonQuery.test(remainder);
+    return /^insert|update|delete/i.test(query);
   }
 
   private hasError(result: db2Lib.ODBCResult): boolean {
