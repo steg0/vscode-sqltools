@@ -17,6 +17,7 @@ import logger from '@sqltools/core/log/vscode';
 const DialectHierarchyChildNames = {
   [DatabaseDialect.PostgreSQL]: ['Database', 'Schema'],
   [DatabaseDialect['AWS Redshift']]: ['Database', 'Schema'],
+  [DatabaseDialect.Cassandra]: ['Keyspace'],
 }
 
 
@@ -288,8 +289,12 @@ export class ConnectionExplorer implements TreeDataProvider<SidebarTreeItem> {
     this.setConnections(connections);
   }
 
+  public getSelection() {
+    return this.treeView.selection;
+  }
+
   public constructor(private extension: SQLTools.ExtensionInterface) {
-    this.treeView = window.createTreeView(`${EXT_NAME}/connectionExplorer`, { treeDataProvider: this });
+    this.treeView = window.createTreeView(`${EXT_NAME}/connectionExplorer`, { treeDataProvider: this, canSelectMany: true });
     ConfigManager.addOnUpdateHook(this.updateTreeRoot);
     this.updateTreeRoot();
     this.extension.context.subscriptions.push(this.treeView);

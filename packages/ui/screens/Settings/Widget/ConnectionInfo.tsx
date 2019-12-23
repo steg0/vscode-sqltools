@@ -5,7 +5,7 @@ import './ConnectionInfo.scss';
 import DriverSettings from './../Drivers';
 import Checkbox from '../Fields/Checkbox';
 
-const ConnectionInfo = ({ updateSettings, submit, toggleGlobal, testConnection, state: { connectionSettings, errors = {}, defaultMethod = null, ...state } }) => {
+const ConnectionInfo = ({ updateSettings, submit, toggleGlobal, toggleUseRelative, testConnection, openConnectionFile, state: { connectionSettings, errors = {}, defaultMethod = null, ...state } }) => {
   const SelectedDriverSettings = DriverSettings[connectionSettings.dialect] || (() => null) as any;
   return (
     <>
@@ -18,6 +18,7 @@ const ConnectionInfo = ({ updateSettings, submit, toggleGlobal, testConnection, 
           updateSettings={updateSettings}
           defaultMethod={defaultMethod}
           errors={errors}
+          toggleUseRelative={toggleUseRelative}
         />
         {`${state.action || 'create'}`.startsWith('create') && <Checkbox
           label='Save To Global Settings?'
@@ -31,7 +32,7 @@ const ConnectionInfo = ({ updateSettings, submit, toggleGlobal, testConnection, 
             {state.externalMessage}
           </span>
         </div>}
-        <div style={{ paddingTop: '12px', paddingBottom: '18px' }}>
+        <div style={{ paddingTop: '12px', paddingBottom: '18px', lineHeight: 1.7 }}>
           <button
             className='btn connect'
             type='submit'
@@ -48,6 +49,18 @@ const ConnectionInfo = ({ updateSettings, submit, toggleGlobal, testConnection, 
           >
             Test Connection
           </button>
+          {!`${state.action || 'create'}`.startsWith('create') && Object.keys(errors).length === 0 && <a
+            onClick={openConnectionFile}
+            style={{
+              float: 'right',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              color: 'inherit',
+              marginRight: '2em'
+            }}
+          >
+            Open settings
+          </a>}
         </div>
       </form>
       {/* {<pre>{JSON.stringify(connectionSettings, null, 2)}</pre>} */}

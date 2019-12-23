@@ -1,0 +1,31 @@
+name: Update Branches
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [10.x]
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        ref: add-driver-example
+
+    - name: Update branch add-driver-example
+      run: |
+        git config --global user.email "bot@mteixeira.dev"
+        git config --global user.name "bot@mtxr"
+        git remote add botorigin https://mtxr:${GITHUB_TOKEN}@github.com/mtxr/vscode-sqltools.git
+        git fetch botorigin
+        git rebase botorigin/master
+        git push --force botorigin add-driver-example
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
