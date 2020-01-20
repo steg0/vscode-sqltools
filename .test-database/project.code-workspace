@@ -208,7 +208,38 @@
         "password": "cassandra",
         "port": 9044,
         "server": "localhost",
-        "username": "cassandra"
+        "username": "cassandra",
+        "group": "CQL"
+      },
+      {
+        "database": "rs",
+        "driver": "MySQL",
+        "name": "mysql_rs_localhost",
+        "password": "k8belka200",
+        "port": 3306,
+        "server": "localhost",
+        "username": "rs"
+      },
+      {
+        "database": "devel",
+        "driver": "DB2",
+        "group": "IBM DB2",
+        "isActive": false,
+        "isConnected": false,
+        "name": "DB2 - localhost",
+        "password": "k8belka200",
+        "port": 50000,
+        "server": "localhost",
+        "username": "rsdb"
+      },
+      {
+        "database": "devel",
+        "dialect": "DB2",
+        "name": "db2_2",
+        "password": "k8belka200",
+        "port": 50000,
+        "server": "localhost",
+        "username": "rsdb"
       }
     ],
     "sqltools.languageServerEnv": {
