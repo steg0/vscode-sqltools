@@ -60,6 +60,7 @@ GO`
 from
   table;`;
     expect(parse(`${query}\n${query}`)).toEqual([query, query]);
+    expect(parse(`${query}${query}`)).toEqual([query, query]);
     expect(parse(`${query}\n${query}`, 'mysql')).toEqual([query, query]);
     expect(parse(`${query}\n${query}`, 'pg')).toEqual([query, query]);
     expect(parse(`${query}\n${query}`, 'mssql')).toEqual([query, query]);

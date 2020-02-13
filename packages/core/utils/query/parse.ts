@@ -156,7 +156,7 @@ class QueryParser {
     return resultQueries;
   }
 
-  static getQueryParts(query: string, splittingIndex: number, numChars: number = 1): Array<string> {
+  static getQueryParts(query: string, splittingIndex: number, numChars: number = 0): Array<string> {
     var statement: string = query.substring(0, splittingIndex);
     var restOfQuery: string = query.substring(splittingIndex + numChars);
     var result: Array<string> = [];
