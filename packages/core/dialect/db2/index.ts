@@ -48,42 +48,67 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
     })
   }
 
+  private async queryByQuery(
+    database: db2Lib.Database, 
+    queries: string[],
+    results: DatabaseInterface.QueryResults[]
+  ): Promise<DatabaseInterface.QueryResults[]> {
+    let thiz: DB2 = this;
+    if (queries.length==0) {
+      database.close();
+      return Promise.resolve(results);
+    }
+    let q = queries[0];
+    try {
+      if (thiz.isNonQuery(q)) {
+        let stmt = database.prepareSync(q);
+        return new Promise(function(resolve, reject) {
+          stmt.executeNonQuery([], (err: Error, res: any[]) => {
+            if (err) {
+              database.close();
+              reject(err);
+            }
+            else {
+              results.push({
+                connId: thiz.getId(),
+                cols: [],
+                messages: [`${res} rows were affected.`],
+                query: q,
+                results: [],
+              });
+              thiz.queryByQuery(database, queries.slice(1), results).then(() => { resolve(results); });
+            }
+          });
+        })
+      }
+      else {
+        let res = thiz.queryResultSync(database, q);
+        let row;
+        let dataSet = []
+        while (row = res.fetchSync()) {
+          dataSet.push(row);
+        }
+        results.push({
+          connId: thiz.getId(),
+          cols: dataSet && dataSet.length > 0 ? Object.keys(dataSet[0]) : [],
+          messages: [],
+          query: q,
+          results: dataSet,
+        });
+        return thiz.queryByQuery(database, queries.slice(1), results);
+      }
+    }
+    catch (err) {
+      database.close();
+      return Promise.reject(err);
+    }
+  }
+
   public async query(query: string): Promise<DatabaseInterface.QueryResults[]> {
     let thiz: DB2 = this;
     const database = await thiz.open();
-    return new Promise<DatabaseInterface.QueryResults[]>(
-      function (resolve, reject) {
-        try {
-          const queries = Utils.query.parse(query)
-          const results: DatabaseInterface.QueryResults[] = [];
-          for (let q of queries) {
-            try {
-              let res = thiz.queryResultSync(database, q);
-              let row;
-              let dataSet = []
-              while (row = res.fetchSync()) {
-                dataSet.push(row)
-              }
-              results.push({
-                connId: thiz.getId(),
-                cols: dataSet && dataSet.length > 0 ? Object.keys(dataSet[0]) : [],
-                messages: [],
-                query: q,
-                results: dataSet,
-              })
-            }
-            catch (err) {
-              reject(err)
-            }
-          }
-          resolve(results);
-        }
-        finally {
-          if (database) {
-            database.close()
-          }
-        }
-      });
+    const queries = Utils.query.parse(query);
+    return thiz.queryByQuery(database, queries, []);
   }
 
   public async testConnection(): Promise<void> {
@@ -214,6 +239,12 @@ export default class DB2 extends GenericDialect<db2Lib.Database> implements Conn
       throw this.getError(result)
     }
     return result;
+  }
+  
+  private isNonQuery(query: string): boolean {
+    const comments = /([^\/\-]*)(?:\-\-[^\n]*\n|\/\*(?:[^\*]|\*(?!\/))*\*\/)/g;
+    const remainder = query.replace(comments, '');
+    return /^\s*(?:insert|update|merge|delete)/i.test(remainder);
   }
 
   private hasError(result: db2Lib.ODBCResult): boolean {
