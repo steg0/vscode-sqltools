@@ -5,7 +5,7 @@ import { ConnectionInterface, DatabaseDialect } from '@sqltools/core/interface';
 import getTableName from '@sqltools/core/utils/query/prefixed-tablenames';
 import SQLTools, { RequestHandler } from '@sqltools/core/plugin-api';
 import { getConnectionDescription, getConnectionId, isEmpty } from '@sqltools/core/utils';
-import { getSelectedText, quickPick, readInput } from '@sqltools/core/utils/vscode';
+import { getSelectedText, quickPick, readInput, getOrCreateEditor } from '@sqltools/core/utils/vscode';
 import { SidebarConnection, SidebarTableOrView, ConnectionExplorer } from '@sqltools/plugins/connection-manager/explorer';
 import ResultsWebviewManager from '@sqltools/plugins/connection-manager/screens/results';
 import SettingsWebview from '@sqltools/plugins/connection-manager/screens/settings';
@@ -13,7 +13,7 @@ import { commands, QuickPickItem, ExtensionContext, window, workspace, Configura
 import { ConnectionDataUpdatedRequest, ConnectRequest, DisconnectRequest, GetConnectionDataRequest, GetConnectionPasswordRequest, GetConnectionsRequest, RefreshTreeRequest, RunCommandRequest, ProgressNotificationStart, ProgressNotificationComplete, ProgressNotificationStartParams, ProgressNotificationCompleteParams, TestConnectionRequest } from './contracts';
 import path from 'path';
 import CodeLensPlugin from '../codelens/extension';
-import { getHome } from '@sqltools/core/utils';
+import { getHome, query } from '@sqltools/core/utils';
 import { extractConnName, getQueryParameters } from '@sqltools/core/utils/query';
 import { CancellationTokenSource } from 'vscode-jsonrpc';
 import statusBar from './status-bar';
@@ -240,6 +240,23 @@ export default class ConnectionManagerPlugin implements SQLTools.ExtensionPlugin
     } catch (e) {
       this.errorHandler('Error fetching records.', e);
     }
+  }
+  
+  private ext_executeCurrentQuery = async () => {
+    const activeEditor = await getOrCreateEditor();
+    if (!activeEditor) {
+        return;
+    }
+    if (!activeEditor.selection.isEmpty) {
+      return this.ext_executeQuery();
+    }
+    const text = activeEditor.document.getText();
+    const currentOffset = activeEditor.document.offsetAt(activeEditor.selection.active);
+    const prefix = text.slice(0, currentOffset+1);
+    const allQueries = query.parse(text);
+    const prefixQueries = query.parse(prefix);
+    const currentQuery = allQueries[prefixQueries.length-1];
+    return this.ext_executeQuery(currentQuery);
   }
 
   private ext_executeQueryFromFile = async () => {
@@ -638,6 +655,7 @@ export default class ConnectionManagerPlugin implements SQLTools.ExtensionPlugin
       .registerCommand(`describeTable`, this.ext_describeTable)
       .registerCommand(`executeFromInput`, this.ext_executeFromInput)
       .registerCommand(`executeQuery`, this.ext_executeQuery)
+      .registerCommand(`executeCurrentQuery`, this.ext_executeCurrentQuery)
       .registerCommand(`executeQueryFromFile`, this.ext_executeQueryFromFile)
       .registerCommand(`refreshTree`, this.ext_refreshTree)
       .registerCommand(`saveResults`, this.ext_saveResults)
